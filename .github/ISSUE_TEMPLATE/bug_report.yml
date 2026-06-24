@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a Meta Quest Link Fixer problem or a repair case it did not handle
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please remove private information from logs before attaching them.
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+  - type: input
+    id: app-version
+    attributes:
+      label: Meta Horizon / Oculus PC app version
+      placeholder: "Unknown is OK"
+  - type: input
+    id: headset
+    attributes:
+      label: Headset model
+      placeholder: "Quest 2 / Quest 3 / Quest Pro"
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver
+      placeholder: "NVIDIA RTX 3070, driver 591.86"
+  - type: textarea
+    id: warning
+    attributes:
+      label: Warning or symptom
+      description: Paste the exact warning text or describe what failed.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Latest fixer log
+      description: Paste relevant lines from Logs/MetaQuestLinkFix-*.log. Remove private paths if needed.
+      render: text
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you already tried
+      description: Include cable/port changes, driver updates, reboot, or rerunning the fixer.

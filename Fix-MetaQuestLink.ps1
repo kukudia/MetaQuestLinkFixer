@@ -1,10 +1,11 @@
 <#
-Meta Quest Link one-click repair for this PC.
-Run from the desktop shortcut. The script elevates itself, repairs common
-Meta Horizon update regressions, then writes a log under D:\MetaQuestLinkFixer\Logs.
+Meta Quest Link one-click repair.
+Run from this folder or a shortcut. The script elevates itself, repairs common
+Meta Horizon / Oculus PC app regressions, then writes a log under .\Logs.
 #>
 
 param(
+    [string]$MetaInstallRoot,
     [switch]$SkipClientCacheReset,
     [switch]$SkipClientLaunch,
     [switch]$NoMessageBox
@@ -18,6 +19,7 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss-ffff"
 $LogPath = Join-Path $LogDir "MetaQuestLinkFix-$Stamp.log"
 $LogEncoding = New-Object System.Text.UTF8Encoding($false)
+$script:MetaInstallRoot = $null
 
 function Write-Step {
     param([string]$Message)
@@ -45,6 +47,69 @@ function Test-Admin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Resolve-MetaInstallRoot {
+    param([string]$PreferredRoot)
+
+    $candidateRoots = New-Object System.Collections.Generic.List[string]
+
+    if ($PreferredRoot) {
+        $candidateRoots.Add($PreferredRoot.TrimEnd("\"))
+    }
+
+    foreach ($path in @(
+        "HKLM:\SOFTWARE\Oculus VR, LLC\Oculus",
+        "HKLM:\SOFTWARE\WOW6432Node\Oculus VR, LLC\Oculus",
+        "HKCU:\SOFTWARE\Oculus VR, LLC\Oculus"
+    )) {
+        try {
+            $props = Get-ItemProperty -Path $path -ErrorAction Stop
+            foreach ($name in @("Base", "InitialAppLibrary", "InstallFolder", "Path")) {
+                if ($props.PSObject.Properties.Name -contains $name) {
+                    $value = [string]$props.$name
+                    if ($value) {
+                        $candidateRoots.Add($value.TrimEnd("\"))
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    foreach ($programRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "C:\", "D:\", "E:\")) {
+        if (-not $programRoot) { continue }
+        foreach ($relative in @("Meta Horizon", "Oculus")) {
+            $candidateRoots.Add((Join-Path $programRoot $relative).TrimEnd("\"))
+        }
+    }
+
+    foreach ($root in $candidateRoots | Select-Object -Unique) {
+        if (-not $root) { continue }
+        $runtime = Join-Path $root "Support\oculus-runtime\oculus_openxr_64.json"
+        $client = Join-Path $root "Support\oculus-client\Client.exe"
+        if ((Test-Path -LiteralPath $runtime) -or (Test-Path -LiteralPath $client)) {
+            return $root
+        }
+    }
+
+    return $null
+}
+
+function Join-MetaPath {
+    param([string]$RelativePath)
+
+    return Join-Path $script:MetaInstallRoot $RelativePath
+}
+
+function Test-MetaProcessPath {
+    param([string]$Path)
+
+    if (-not $Path -or -not $script:MetaInstallRoot) {
+        return $false
+    }
+
+    $root = $script:MetaInstallRoot.TrimEnd("\") + "\"
+    return $Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Stop-MetaProcesses {
     $knownNames = @(
         "OVRServer_x64",
@@ -61,8 +126,7 @@ function Stop-MetaProcesses {
         $path = ""
         try { $path = [string]$_.Path } catch {}
 
-        $knownNames -contains $_.ProcessName -or
-            $path.StartsWith("D:\Meta Horizon\", [System.StringComparison]::OrdinalIgnoreCase)
+        $knownNames -contains $_.ProcessName -or (Test-MetaProcessPath -Path $path)
     }
 
     foreach ($process in $processes) {
@@ -348,6 +412,7 @@ if (-not (Test-Admin)) {
         "-File", "`"$PSCommandPath`""
     )
 
+    if ($MetaInstallRoot) { $args += @("-MetaInstallRoot", "`"$MetaInstallRoot`"") }
     if ($SkipClientCacheReset) { $args += "-SkipClientCacheReset" }
     if ($SkipClientLaunch) { $args += "-SkipClientLaunch" }
     if ($NoMessageBox) { $args += "-NoMessageBox" }
@@ -358,16 +423,26 @@ if (-not (Test-Admin)) {
 
 Write-Step "Meta Quest Link repair started."
 
-$OculusRuntime = "D:\Meta Horizon\Support\oculus-runtime\oculus_openxr_64.json"
-$OculusClient = "D:\Meta Horizon\Support\oculus-client\Client.exe"
-$OculusDriver = "D:\Meta Horizon\Support\oculus-drivers\oculus-driver.exe"
+$script:MetaInstallRoot = Resolve-MetaInstallRoot -PreferredRoot $MetaInstallRoot
+if (-not $script:MetaInstallRoot) {
+    Write-Step "ERROR: Meta Quest Link / Oculus PC app install directory could not be found."
+    Write-Step "Checked common registry keys plus C:\, D:\, E:\, Program Files, and Program Files (x86)."
+    Read-Host "Meta Quest Link install not found. Install Meta Horizon / Oculus PC app, then press Enter to close"
+    exit 1
+}
+
+Write-Step "Meta Quest Link install root: $script:MetaInstallRoot"
+
+$OculusRuntime = Join-MetaPath "Support\oculus-runtime\oculus_openxr_64.json"
+$OculusClient = Join-MetaPath "Support\oculus-client\Client.exe"
+$OculusDriver = Join-MetaPath "Support\oculus-drivers\oculus-driver.exe"
 $CrashAfterLaunch = $false
 $LatestCrashPath = ""
 $CacheBackups = @()
 
 if (-not (Test-Path -LiteralPath $OculusRuntime)) {
     Write-Step "ERROR: Oculus OpenXR runtime not found: $OculusRuntime"
-    Write-Step "Repair cannot continue until Meta Horizon is installed at D:\Meta Horizon."
+    Write-Step "Repair cannot continue until Meta Quest Link / Oculus PC app is installed correctly."
     Read-Host "Meta Horizon runtime not found. Press Enter to close"
     exit 1
 }
@@ -402,18 +477,17 @@ $GpuPrefPaths = @(
     "Registry::HKEY_USERS\S-1-5-18\Software\Microsoft\DirectX\UserGpuPreferences"
 )
 $Apps = @(
-    "D:\Meta Horizon\Support\oculus-runtime\OVRServer_x64.exe",
-    "D:\Meta Horizon\Support\oculus-runtime\OVRRedir.exe",
-    "D:\Meta Horizon\Support\oculus-runtime\OVRServiceLauncher.exe",
-    "D:\Meta Horizon\Support\oculus-client\OculusClient.exe",
-    "D:\Meta Horizon\Support\oculus-client\Client.exe",
-    "D:\Meta Horizon\Support\oculus-dash\dash\bin\OculusDash.exe",
-    "D:\Meta Horizon\Support\oculus-platform-runtime\oculus-platform-runtime.exe",
-    "D:\Meta Horizon\Support\oculus-remote-desktop\RemoteDesktopCompanion.exe",
-    "D:\Unity\Editors\6000.3.0f1\Editor\Unity.exe"
+    (Join-MetaPath "Support\oculus-runtime\OVRServer_x64.exe"),
+    (Join-MetaPath "Support\oculus-runtime\OVRRedir.exe"),
+    (Join-MetaPath "Support\oculus-runtime\OVRServiceLauncher.exe"),
+    (Join-MetaPath "Support\oculus-client\OculusClient.exe"),
+    (Join-MetaPath "Support\oculus-client\Client.exe"),
+    (Join-MetaPath "Support\oculus-dash\dash\bin\OculusDash.exe"),
+    (Join-MetaPath "Support\oculus-platform-runtime\oculus-platform-runtime.exe"),
+    (Join-MetaPath "Support\oculus-remote-desktop\RemoteDesktopCompanion.exe")
 )
 
-$MetaHorizonSupportDir = "D:\Meta Horizon\Support"
+$MetaHorizonSupportDir = Join-MetaPath "Support"
 if (Test-Path -LiteralPath $MetaHorizonSupportDir -PathType Container) {
     $Apps += Get-ChildItem -LiteralPath $MetaHorizonSupportDir -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty FullName

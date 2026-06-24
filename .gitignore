@@ -1,3 +1,4 @@
 Logs/
 *.log
 ClientCacheBackups/
+dist/
