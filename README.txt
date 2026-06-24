@@ -1,8 +1,8 @@
-Meta Quest Link Fixer
+Meta Quest Link GPU Fixer
 
 Download, extract, then double-click:
 
-  Run-MetaQuestLinkFixer.cmd
+  Run-MetaQuestLinkGpuFixer.cmd
 
 The tool requests administrator permission and writes logs to:
 
@@ -10,4 +10,4 @@ The tool requests administrator permission and writes logs to:
 
 For full instructions, troubleshooting, and advanced options, open README.md:
 
-  https://github.com/kukudia/MetaQuestLinkFixer
+  https://github.com/kukudia/meta-quest-link-gpu-fixer

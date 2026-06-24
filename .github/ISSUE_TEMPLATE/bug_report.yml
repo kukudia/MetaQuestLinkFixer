@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a Meta Quest Link Fixer problem or a repair case it did not handle
+description: Report a Meta Quest Link GPU Fixer problem or a repair case it did not handle
 title: "[Bug]: "
 labels: ["bug"]
 body:
@@ -15,8 +15,8 @@ body:
   - type: input
     id: app-version
     attributes:
-      label: Meta Horizon / Oculus PC app version
-      placeholder: "Unknown is OK"
+      label: Meta Horizon / Meta Quest Link app version
+      placeholder: "Unknown is OK; Support\\oculus-client\\version is useful"
   - type: input
     id: headset
     attributes:

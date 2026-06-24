@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $distDir = Join-Path $repoRoot "dist"
-$packageName = "MetaQuestLinkFixer-$Version"
+$packageName = "MetaQuestLinkGpuFixer-$Version"
 $packageDir = Join-Path $distDir $packageName
 $zipPath = Join-Path $distDir "$packageName.zip"
 
@@ -18,8 +18,8 @@ New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 
 foreach ($file in @(
     "Fix-MetaQuestLink.ps1",
-    "Run-MetaQuestLinkFixer.cmd",
-    "MetaQuestLinkFixer.ico",
+    "Run-MetaQuestLinkGpuFixer.cmd",
+    "MetaQuestLinkGpuFixer.ico",
     "README.md",
     "README.txt",
     "LICENSE"

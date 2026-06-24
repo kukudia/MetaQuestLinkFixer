@@ -1,21 +1,48 @@
-# Meta Quest Link Fixer
+# Meta Quest Link GPU Fixer
 
-A small Windows repair tool for common Meta Quest Link / Oculus PC app regressions after updates.
+Unofficial Windows repair tool for Meta Quest Link / Meta Horizon PC app cases where Quest Link does not appear to use the high-performance NVIDIA GPU, shows a misleading minimum-spec warning, or loses related OpenXR, USB driver, and proxy settings after an update.
 
-It is designed for people who see warnings such as:
+This project is not affiliated with Meta. It exists to make one repeatable local fix easier to inspect, run, and improve.
 
+## Who This Helps
+
+Try this tool if you see one or more of these symptoms:
+
+- Meta Quest Link says the PC does not meet minimum requirements even though an NVIDIA GPU is installed.
+- Meta Quest Link / Oculus PC app appears to detect the wrong GPU or an integrated GPU.
+- Windows Graphics Settings does not keep Meta Horizon / Oculus processes on high performance.
 - Meta Quest Link is not the default OpenXR runtime.
-- The PC does not meet minimum requirements even when an NVIDIA GPU is present.
-- Quest Link USB interfaces are stale or missing after reconnecting the headset.
+- Quest Link USB interfaces are stale, missing, or left in a bad state after reconnecting the headset.
 - Meta Horizon / Oculus PC app starts, crashes, or loses network/proxy settings after an update.
 
-The tool is a PowerShell script plus a double-click `.cmd` launcher. It asks for administrator permission, applies targeted repairs, then writes a detailed log under `Logs`.
+The tool focuses on local Windows configuration. It does not bypass Meta's official hardware compatibility checks.
+
+## Tested Meta Quest Link Versions
+
+Meta's PC app does not expose one stable version number in every location, so this project records the version files visible in the tested install.
+
+Verified test environment:
+
+- Meta Horizon / Meta Quest Link client component: `Support\oculus-client\version` = `32.1.1`
+- Oculus USB driver component: `Support\oculus-drivers\version.txt` = `1.77.0.000001`
+- Install layout: `Meta Horizon\Support\oculus-runtime`, `oculus-client`, and `oculus-drivers`
+- Windows: Windows 11 build `26200`
+- GPU target: NVIDIA systems, including hybrid-GPU laptops/desktops
+
+Expected compatible app layouts:
+
+- Newer Meta installs under `Meta Horizon`
+- Older Oculus installs under `Oculus`
+- Installs where `Support\oculus-runtime\oculus_openxr_64.json` and `Support\oculus-client\Client.exe` still exist
+
+If Meta changes the internal folder layout or removes the bundled driver/runtime files, this script may need an update. Please open an issue with the newest log and your app version if that happens.
 
 ## What It Repairs
 
 - Sets Meta Quest Link as the default OpenXR runtime in HKCU and HKLM, for both 64-bit and 32-bit registry views.
 - Re-applies the OpenXR runtime after Oculus driver repair, because some driver operations can change runtime registration.
 - Sets Windows high-performance GPU preferences for Meta Horizon / Oculus executables for both the current user and the LocalSystem account used by `OVRService`.
+- Searches the Meta `Support` folder and applies GPU preference entries to bundled executables, not only a hardcoded app list.
 - Enables the Oculus `UseSystemProxy` registry flag.
 - Mirrors the current user proxy to WinHTTP when a user proxy is enabled, or resets WinHTTP proxy to direct when no user proxy is enabled.
 - Removes stale offline Quest USB device records.
@@ -27,8 +54,8 @@ The tool is a PowerShell script plus a double-click `.cmd` launcher. It asks for
 ## Download And Run
 
 1. Open the latest release or download this repository as a ZIP.
-2. Extract the ZIP to any folder, for example `C:\Tools\MetaQuestLinkFixer`.
-3. Double-click `Run-MetaQuestLinkFixer.cmd`.
+2. Extract the ZIP to any folder, for example `C:\Tools\meta-quest-link-gpu-fixer`.
+3. Double-click `Run-MetaQuestLinkGpuFixer.cmd`.
 4. Approve the Windows administrator prompt.
 5. Read the final result dialog and save the log path if you need help.
 
@@ -96,24 +123,6 @@ Before running:
 - Disconnect or reconnect the headset only when the tool tells you to retry.
 - Expect `OVRService` and Meta Horizon / Oculus processes to restart.
 
-## Compatibility
-
-Tested target environment:
-
-- Windows 10/11
-- Meta Horizon / Oculus PC app installed as `Meta Horizon` or `Oculus`
-- Meta Quest Link / Quest USB drivers
-- NVIDIA GPU systems, including hybrid GPU laptops/desktops
-
-The script auto-detects common install locations from registry and these folders:
-
-- `C:\Program Files\Meta Horizon`
-- `C:\Program Files\Oculus`
-- `C:\Meta Horizon`
-- `D:\Meta Horizon`
-- `E:\Meta Horizon`
-- matching `Oculus` folders on those drives
-
 ## What This Tool Cannot Fix
 
 - Unsupported hardware according to Meta's current compatibility list.
@@ -121,19 +130,32 @@ The script auto-detects common install locations from registry and these folders
 - Broken Meta account login, server outages, or region/account restrictions.
 - NVIDIA/Intel/AMD driver bugs that require a vendor driver update or rollback.
 - Air Link network quality issues unrelated to local PC runtime registration.
+- A future Meta PC app update that changes the internal `Support` folder layout.
+
+## Good Issue Reports
+
+Please include:
+
+- Windows version
+- Meta Horizon / Meta Quest Link app version, or the contents of `Support\oculus-client\version`
+- Headset model
+- GPU model and driver version
+- Whether you are using USB Link or Air Link
+- The newest `Logs\MetaQuestLinkFix-*.log`
+- A screenshot of the warning, with private details hidden
 
 ## Repository Description
 
 Suggested GitHub About description:
 
 ```text
-One-click Windows repair tool for Meta Quest Link / Oculus PC app OpenXR, GPU preference, USB driver, proxy, and compatibility warning issues.
+Unofficial Windows repair tool for Meta Quest Link GPU detection, high-performance GPU preference, OpenXR runtime, USB driver, proxy, and compatibility warning issues.
 ```
 
 Suggested topics:
 
 ```text
-meta-quest, quest-link, oculus, openxr, vr, windows, powershell, gpu, usb-driver, troubleshooting
+meta-quest, quest-link, gpu-fix, nvidia, openxr, vr, windows, powershell, usb-driver, troubleshooting
 ```
 
 ## License

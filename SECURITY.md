@@ -12,4 +12,4 @@ If your report includes account identifiers, local usernames, device serials, or
 
 ## Scope
 
-This tool performs local Windows repair actions for Meta Quest Link / Oculus PC app configuration. Security issues in Meta software, GPU drivers, Windows, or headset firmware should be reported to the relevant vendor.
+This tool performs local Windows repair actions for Meta Quest Link GPU detection, OpenXR, USB driver, proxy, and related PC app configuration. Security issues in Meta software, GPU drivers, Windows, or headset firmware should be reported to the relevant vendor.

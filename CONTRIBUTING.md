@@ -1,11 +1,11 @@
 # Contributing
 
-Thanks for helping make Meta Quest Link Fixer useful beyond one machine.
+Thanks for helping make Meta Quest Link GPU Fixer useful beyond one machine.
 
 ## Good Issues Include
 
 - Windows version
-- Meta Horizon / Oculus PC app version if known
+- Meta Horizon / Meta Quest Link app version if known
 - Headset model
 - GPU model and driver version
 - Whether the headset is connected by USB Link, Air Link, or not connected
@@ -18,7 +18,7 @@ Thanks for helping make Meta Quest Link Fixer useful beyond one machine.
 - Preserve CRLF line endings for `.ps1`, `.cmd`, `.txt`, and `.md` files.
 - Avoid hardcoded local install paths unless they are only examples in docs.
 - Do not include user logs, cache backups, tokens, or machine-specific files in commits.
-- Keep repairs targeted to Meta Quest Link / Oculus PC app state.
+- Keep repairs targeted to Meta Quest Link GPU detection, OpenXR, USB driver, proxy, and related PC app state.
 
 ## Validation
 

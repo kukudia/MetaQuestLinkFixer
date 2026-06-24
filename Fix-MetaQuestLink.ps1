@@ -652,7 +652,7 @@ Write-Step "Repair completed."
 
 if (-not $NoMessageBox) {
     Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show($Message, "Meta Quest Link Fixer") | Out-Null
+    [System.Windows.MessageBox]::Show($Message, "Meta Quest Link GPU Fixer") | Out-Null
 } else {
     Write-Step "Message box skipped by command-line switch."
 }
