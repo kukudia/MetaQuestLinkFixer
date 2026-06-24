@@ -153,6 +153,105 @@ function Start-UserProcess {
     }
 }
 
+function Set-GpuPreference {
+    param(
+        [string]$RegistryPath,
+        [string]$AppPath
+    )
+
+    try {
+        New-Item -Path $RegistryPath -Force | Out-Null
+        New-ItemProperty -Path $RegistryPath -Name $AppPath -PropertyType String -Value "GpuPreference=2;" -Force | Out-Null
+        Write-Step "GPU preference set ($RegistryPath): $AppPath"
+        return $true
+    } catch {
+        Write-Step "WARNING: Could not set GPU preference ($RegistryPath) for ${AppPath}: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Get-LastJsonStringValue {
+    param(
+        [string]$Text,
+        [string]$Name,
+        [switch]$PreferNonEmpty
+    )
+
+    $escapedName = [regex]::Escape($Name)
+    $matches = [regex]::Matches($Text, '"' + $escapedName + '"\s*:\s*"([^"]*)"')
+    if ($matches.Count -eq 0) {
+        return ""
+    }
+
+    if ($PreferNonEmpty) {
+        for ($i = $matches.Count - 1; $i -ge 0; $i--) {
+            $value = $matches[$i].Groups[1].Value.Trim()
+            if ($value) {
+                return $value
+            }
+        }
+    }
+
+    return $matches[$matches.Count - 1].Groups[1].Value.Trim()
+}
+
+function Get-LatestOculusCompatibilitySummary {
+    $oculusLocalDir = Join-Path $env:LOCALAPPDATA "Oculus"
+    if (-not (Test-Path -LiteralPath $oculusLocalDir -PathType Container)) {
+        return "Latest Meta compatibility: no local Oculus log directory found."
+    }
+
+    $latestPerfLog = Get-ChildItem -LiteralPath $oculusLocalDir -Filter "PerfLog_*.json" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (-not $latestPerfLog) {
+        return "Latest Meta compatibility: no PerfLog_*.json found."
+    }
+
+    try {
+        $text = Get-Content -LiteralPath $latestPerfLog.FullName -Raw -ErrorAction Stop
+    } catch {
+        return "Latest Meta compatibility: could not read $($latestPerfLog.FullName): $($_.Exception.Message)"
+    }
+
+    $overallCompat = Get-LastJsonStringValue -Text $text -Name "overall_compat"
+    $cpuNames = Get-LastJsonStringValue -Text $text -Name "cpu_names" -PreferNonEmpty
+    $cpuCompat = Get-LastJsonStringValue -Text $text -Name "cpu_compat"
+    $gpuNames = Get-LastJsonStringValue -Text $text -Name "gpu_names" -PreferNonEmpty
+    $gpuCompat = Get-LastJsonStringValue -Text $text -Name "gpu_compat"
+    $gpuVram = Get-LastJsonStringValue -Text $text -Name "gpu_vram"
+    $gpuDriver = Get-LastJsonStringValue -Text $text -Name "gpu_driver"
+    $hmdGpu = Get-LastJsonStringValue -Text $text -Name "hmd_graphics_adapter_desc" -PreferNonEmpty
+    $hmdGpuDriver = Get-LastJsonStringValue -Text $text -Name "hmd_graphics_adapter_driver" -PreferNonEmpty
+    $systemMemoryCompat = Get-LastJsonStringValue -Text $text -Name "system_memory_compat"
+    $osCompat = Get-LastJsonStringValue -Text $text -Name "os_compat"
+    $usbCompat = Get-LastJsonStringValue -Text $text -Name "usb_compat"
+
+    $summaryLines = @(
+        "Latest Meta compatibility log: $($latestPerfLog.FullName)",
+        "overall_compat = $overallCompat",
+        "cpu = $cpuCompat ($cpuNames)",
+        "gpu_compat = $gpuCompat",
+        "gpu_names = $gpuNames",
+        "gpu_vram_mib = $gpuVram",
+        "gpu_driver = $gpuDriver",
+        "hmd_graphics_adapter = $hmdGpu",
+        "hmd_graphics_driver = $hmdGpuDriver",
+        "system_memory/os/usb = $systemMemoryCompat / $osCompat / $usbCompat"
+    )
+
+    foreach ($line in $summaryLines) {
+        Write-Step $line
+    }
+
+    if ($hmdGpu -match "NVIDIA" -or $gpuCompat -match "PASS") {
+        Write-Step "Compatibility note: Meta is seeing the NVIDIA adapter, but overall compatibility can still fail because CPU or another enumerated adapter fails Meta's whitelist."
+    }
+
+    return ($summaryLines -join [Environment]::NewLine)
+}
+
 if (-not (Test-Admin)) {
     $args = @(
         "-NoProfile",
@@ -211,8 +310,10 @@ New-ItemProperty -Path "HKCU:\SOFTWARE\Khronos\OpenXR\1" -Name ActiveRuntime -Pr
 & reg add "HKLM\SOFTWARE\Khronos\OpenXR\1" /v ActiveRuntime /t REG_SZ /d $OculusRuntime /f | Out-Null
 
 Write-Step "Setting Meta Horizon and Unity executables to high-performance GPU."
-$GpuPrefPath = "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences"
-New-Item -Path $GpuPrefPath -Force | Out-Null
+$GpuPrefPaths = @(
+    "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences",
+    "Registry::HKEY_USERS\S-1-5-18\Software\Microsoft\DirectX\UserGpuPreferences"
+)
 $Apps = @(
     "D:\Meta Horizon\Support\oculus-runtime\OVRServer_x64.exe",
     "D:\Meta Horizon\Support\oculus-runtime\OVRRedir.exe",
@@ -220,12 +321,26 @@ $Apps = @(
     "D:\Meta Horizon\Support\oculus-client\OculusClient.exe",
     "D:\Meta Horizon\Support\oculus-client\Client.exe",
     "D:\Meta Horizon\Support\oculus-dash\dash\bin\OculusDash.exe",
+    "D:\Meta Horizon\Support\oculus-platform-runtime\oculus-platform-runtime.exe",
+    "D:\Meta Horizon\Support\oculus-remote-desktop\RemoteDesktopCompanion.exe",
     "D:\Unity\Editors\6000.3.0f1\Editor\Unity.exe"
 )
+
+$MetaHorizonSupportDir = "D:\Meta Horizon\Support"
+if (Test-Path -LiteralPath $MetaHorizonSupportDir -PathType Container) {
+    $Apps += Get-ChildItem -LiteralPath $MetaHorizonSupportDir -Recurse -Filter "*.exe" -File -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty FullName
+}
+
+$Apps = @($Apps | Where-Object { $_ } | Sort-Object -Unique)
+$GpuPreferenceSuccessCount = 0
 foreach ($app in $Apps) {
     if (Test-Path -LiteralPath $app) {
-        New-ItemProperty -Path $GpuPrefPath -Name $app -PropertyType String -Value "GpuPreference=2;" -Force | Out-Null
-        Write-Step "GPU preference set: $app"
+        foreach ($gpuPrefPath in $GpuPrefPaths) {
+            if (Set-GpuPreference -RegistryPath $gpuPrefPath -AppPath $app) {
+                $GpuPreferenceSuccessCount++
+            }
+        }
     } else {
         Write-Step "Skipped missing executable: $app"
     }
@@ -318,6 +433,8 @@ try {
 }
 Write-Step "NVIDIA status: $NvidiaLine"
 
+$CompatibilitySummary = Get-LatestOculusCompatibilitySummary
+
 $QuestDevices = Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object {
     $_.InstanceId -like "USB\VID_2833*" -or $_.FriendlyName -match "Quest|Oculus|Reality Labs|Meta"
 }
@@ -349,8 +466,12 @@ Meta Quest Link repair completed.
 
 Network to graph.oculus.com: $GraphOk
 NVIDIA encoder active: $EncoderActive
+GPU preference entries written: $GpuPreferenceSuccessCount
 Quest OK interfaces found: $($QuestOkNames.Count)
 Meta Horizon client crash after launch: $ClientCrashText
+
+Compatibility details:
+$CompatibilitySummary
 
 Client cache backups:
 $CacheBackupText
