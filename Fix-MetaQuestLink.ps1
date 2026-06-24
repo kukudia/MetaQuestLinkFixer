@@ -153,6 +153,95 @@ function Start-UserProcess {
     }
 }
 
+function Get-OpenXrRegistryTargets {
+    return @(
+        @{ RegPath = "HKCU\SOFTWARE\Khronos\OpenXR\1"; RegView = "/reg:64"; Label = "HKCU 64-bit" },
+        @{ RegPath = "HKCU\SOFTWARE\Khronos\OpenXR\1"; RegView = "/reg:32"; Label = "HKCU 32-bit" },
+        @{ RegPath = "HKLM\SOFTWARE\Khronos\OpenXR\1"; RegView = "/reg:64"; Label = "HKLM 64-bit" },
+        @{ RegPath = "HKLM\SOFTWARE\Khronos\OpenXR\1"; RegView = "/reg:32"; Label = "HKLM 32-bit" }
+    )
+}
+
+function Set-OpenXrRuntimeRegistryValue {
+    param(
+        [string]$RegPath,
+        [string]$RegView,
+        [string]$Label,
+        [string]$RuntimePath
+    )
+
+    $args = @("add", $RegPath, "/v", "ActiveRuntime", "/t", "REG_SZ", "/d", $RuntimePath, "/f")
+    if ($RegView) { $args += $RegView }
+
+    $output = & reg.exe @args 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 0) {
+        Write-Step "OpenXR runtime set ($Label): $RuntimePath"
+        return $true
+    }
+
+    Write-Step "WARNING: Could not set OpenXR runtime ($Label): $($output -join ' ')"
+    return $false
+}
+
+function Set-OpenXrRuntime {
+    param([string]$RuntimePath)
+
+    $successCount = 0
+    foreach ($target in Get-OpenXrRegistryTargets) {
+        if (Set-OpenXrRuntimeRegistryValue -RegPath $target.RegPath -RegView $target.RegView -Label $target.Label -RuntimePath $RuntimePath) {
+            $successCount++
+        }
+    }
+
+    return $successCount
+}
+
+function Get-OpenXrRuntimeRegistryValue {
+    param(
+        [string]$RegPath,
+        [string]$RegView
+    )
+
+    $args = @("query", $RegPath, "/v", "ActiveRuntime")
+    if ($RegView) { $args += $RegView }
+
+    $output = & reg.exe @args 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        return ""
+    }
+
+    $valueLine = $output | Where-Object { $_ -match "ActiveRuntime" } | Select-Object -First 1
+    if (-not $valueLine) {
+        return ""
+    }
+
+    return ($valueLine -replace "^\s*ActiveRuntime\s+REG_SZ\s+", "").Trim()
+}
+
+function Get-OpenXrRuntimeStatus {
+    param([string]$RuntimePath)
+
+    $details = @()
+    $allMatch = $true
+    foreach ($target in Get-OpenXrRegistryTargets) {
+        $value = Get-OpenXrRuntimeRegistryValue -RegPath $target.RegPath -RegView $target.RegView
+        $matchesExpected = [string]::Equals($value, $RuntimePath, [System.StringComparison]::OrdinalIgnoreCase)
+        if (-not $matchesExpected) {
+            $allMatch = $false
+        }
+
+        $detail = "$($target.Label) = $value"
+        $details += $detail
+        Write-Step "OpenXR default check: $detail (match=$matchesExpected)"
+    }
+
+    return [PSCustomObject]@{
+        Ok = $allMatch
+        Details = ($details -join [Environment]::NewLine)
+    }
+}
+
 function Set-GpuPreference {
     param(
         [string]$RegistryPath,
@@ -304,10 +393,8 @@ if (-not $SkipClientCacheReset) {
     Write-Step "Skipped client cache reset by command-line switch."
 }
 
-Write-Step "Setting Oculus OpenXR runtime in HKCU and HKLM."
-New-Item -Path "HKCU:\SOFTWARE\Khronos\OpenXR\1" -Force | Out-Null
-New-ItemProperty -Path "HKCU:\SOFTWARE\Khronos\OpenXR\1" -Name ActiveRuntime -PropertyType String -Value $OculusRuntime -Force | Out-Null
-& reg add "HKLM\SOFTWARE\Khronos\OpenXR\1" /v ActiveRuntime /t REG_SZ /d $OculusRuntime /f | Out-Null
+Write-Step "Setting Meta Quest Link as the default OpenXR runtime."
+$OpenXrWriteCount = Set-OpenXrRuntime -RuntimePath $OculusRuntime
 
 Write-Step "Setting Meta Horizon and Unity executables to high-performance GPU."
 $GpuPrefPaths = @(
@@ -387,6 +474,9 @@ if (Test-Path -LiteralPath $OculusDriver) {
     Write-Step "Skipped Oculus driver repair; installer not found: $OculusDriver"
 }
 
+Write-Step "Re-applying Meta Quest Link default OpenXR runtime after driver repair."
+$OpenXrWriteCount += Set-OpenXrRuntime -RuntimePath $OculusRuntime
+
 Write-Step "Starting Oculus runtime service."
 try { Start-Service OVRService -ErrorAction SilentlyContinue } catch {}
 Start-Sleep -Seconds 3
@@ -414,10 +504,7 @@ if (-not $SkipClientLaunch) {
 }
 
 Write-Step "Running verification checks."
-$OpenXrHkcu = (& reg query "HKCU\SOFTWARE\Khronos\OpenXR\1" /v ActiveRuntime 2>&1) -join " "
-$OpenXrHklm = (& reg query "HKLM\SOFTWARE\Khronos\OpenXR\1" /v ActiveRuntime 2>&1) -join " "
-Write-Step "HKCU OpenXR: $OpenXrHkcu"
-Write-Step "HKLM OpenXR: $OpenXrHklm"
+$OpenXrStatus = Get-OpenXrRuntimeStatus -RuntimePath $OculusRuntime
 
 $GraphOk = $false
 try {
@@ -465,10 +552,15 @@ $Message = @"
 Meta Quest Link repair completed.
 
 Network to graph.oculus.com: $GraphOk
+OpenXR default runtime set: $($OpenXrStatus.Ok)
+OpenXR runtime entries written: $OpenXrWriteCount
 NVIDIA encoder active: $EncoderActive
 GPU preference entries written: $GpuPreferenceSuccessCount
 Quest OK interfaces found: $($QuestOkNames.Count)
 Meta Horizon client crash after launch: $ClientCrashText
+
+OpenXR details:
+$($OpenXrStatus.Details)
 
 Compatibility details:
 $CompatibilitySummary

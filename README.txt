@@ -6,7 +6,8 @@ The tool requests administrator permission, repairs common Meta Horizon update r
 D:\MetaQuestLinkFixer\Logs
 
 It repairs:
-- Oculus OpenXR runtime in HKCU and HKLM
+- Meta Quest Link default OpenXR runtime in HKCU/HKLM for both 64-bit and
+  32-bit registry views, then re-applies it after Oculus driver repair
 - Windows high-performance GPU preferences for Meta Horizon and Unity, for both
   the current user and the LocalSystem account used by OVRService
 - Oculus UseSystemProxy registry flag
@@ -23,6 +24,7 @@ process" Add-Content error.
 
 Success indicators:
 - graph.oculus.com:443 reachable = True
+- OpenXR default runtime set = True
 - Reality Labs Highwind/XRSP/Commlib interfaces = OK when the headset is connected
 - nvidia-smi encoder.stats.sessionCount > 0 when Quest Link is active
 - Compatibility details show whether Meta is seeing the NVIDIA GPU. If NVIDIA is
