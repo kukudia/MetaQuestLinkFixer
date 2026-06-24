@@ -77,14 +77,14 @@ function Resolve-MetaInstallRoot {
     foreach ($programRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, "C:\", "D:\", "E:\")) {
         if (-not $programRoot) { continue }
         foreach ($relative in @("Meta Horizon", "Oculus")) {
-            $candidateRoots.Add((Join-Path $programRoot $relative).TrimEnd("\"))
+            $candidateRoots.Add(([System.IO.Path]::Combine($programRoot, $relative)).TrimEnd("\"))
         }
     }
 
     foreach ($root in $candidateRoots | Select-Object -Unique) {
         if (-not $root) { continue }
-        $runtime = Join-Path $root "Support\oculus-runtime\oculus_openxr_64.json"
-        $client = Join-Path $root "Support\oculus-client\Client.exe"
+        $runtime = [System.IO.Path]::Combine($root, "Support\oculus-runtime\oculus_openxr_64.json")
+        $client = [System.IO.Path]::Combine($root, "Support\oculus-client\Client.exe")
         if ((Test-Path -LiteralPath $runtime) -or (Test-Path -LiteralPath $client)) {
             return $root
         }
